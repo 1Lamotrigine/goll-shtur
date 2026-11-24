@@ -19,7 +19,11 @@ var color_slots := PackedInt32Array([0, 1, 2, 3])
 var slots := PackedVector3Array()
 var cooldown := PackedFloat32Array([0, 0, 0, 0])
 var counts := PackedInt32Array([0, 0, 0, 0])
-@export_range(5.0, 55.0, 1.0) var turn_degrees_per_vote := 35.0
+const MAX_TURN_RATE := 75.0
+const RAMP_SECONDS := 0.2
+const BRAKE_SECONDS := 0.08
+var turn_rate := 0.0
+var turn_arc := preload("res://player/turn_arc.gd").new()
 var control_yaw := false
 var turn_votes := 0
 const CUES = preload("res://player/flight_cues.gd")
@@ -33,6 +37,7 @@ func flash_target(target: int) -> void:
 	tween.tween_callback(flash.queue_free)
 
 func _process(_delta: float) -> void:
+	turn_arc.display(global_position, turn_rate / MAX_TURN_RATE if is_visible_in_tree() else 0.0)
 	var tilt := global_basis.y.slide(Vector3.UP)
 	arrow.hide()
 	if not is_visible_in_tree() or tilt.length_squared() < 0.0004:
@@ -47,6 +52,7 @@ func _process(_delta: float) -> void:
 var spawn: Transform3D
 
 func _ready() -> void:
+	add_child(turn_arc)
 	spawn = global_transform
 	arrow = CUES.arrow(self)
 	pull_accepted.connect(func(_source, target): flash_target(target))
@@ -98,6 +104,7 @@ func _physics_process(delta: float) -> void:
 		global_transform = spawn
 		linear_velocity = Vector3.ZERO
 		angular_velocity = Vector3.ZERO
+		turn_rate = 0.0
 		cooldown.fill(0)
 		counts.fill(0)
 		sleeping = false
@@ -113,5 +120,10 @@ func _integrate_forces(state: PhysicsDirectBodyState3D) -> void:
 	state.linear_velocity = (vertical + horizontal.limit_length(max_horizontal_speed)).limit_length(max_linear_speed)
 	var spin := state.angular_velocity.limit_length(max_angular_speed)
 	if control_yaw:
-		spin.y = deg_to_rad(clampf(turn_degrees_per_vote * turn_votes, -70, 70))
+		var target := signi(turn_votes) * minf(MAX_TURN_RATE, 35.0 + 10.0 * (absi(turn_votes) - 1))
+		if turn_rate * target < 0 or target == 0:
+			turn_rate = move_toward(turn_rate, 0, MAX_TURN_RATE * state.step / BRAKE_SECONDS)
+		else:
+			turn_rate = move_toward(turn_rate, target, absf(target) * state.step / RAMP_SECONDS)
+		spin.y = deg_to_rad(turn_rate)
 	state.angular_velocity = spin

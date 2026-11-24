@@ -264,6 +264,7 @@ func show_walkers() -> void:
 	body.linear_velocity = Vector3.ZERO
 	body.angular_velocity = Vector3.ZERO
 	body.turn_votes = 0
+	body.turn_rate = 0.0
 	body.collision_layer = 0
 	body.collision_mask = 0
 	body.hide()
@@ -293,7 +294,7 @@ func send_state(recipient := 0) -> void:
 		velocities.append(walker.get_real_velocity())
 		grounded.append(int(walker.is_on_floor()))
 		positions.append(walker.position)
-	var state := [positions, velocities, grounded, body.transform, votes, joined, directions, warn_until, tick]
+	var state := [positions, velocities, grounded, body.transform, votes, joined, directions, warn_until, tick, body.turn_rate]
 	if recipient:
 		recover_state.rpc_id(recipient, state)
 	else:
@@ -313,11 +314,12 @@ func recover_state(state: Array) -> void:
 func snapshot(state: Array) -> void:
 	apply_snapshot.callv(state)
 
-func apply_snapshot(positions: PackedVector3Array, velocities: PackedVector3Array, grounded: PackedByteArray, pose: Transform3D, ready_votes: Array, linked: bool, inputs: Array, warnings: PackedInt64Array, host_tick: int) -> void:
+func apply_snapshot(positions: PackedVector3Array, velocities: PackedVector3Array, grounded: PackedByteArray, pose: Transform3D, ready_votes: Array, linked: bool, inputs: Array, warnings: PackedInt64Array, host_tick: int, turn_rate: float) -> void:
 	if host_tick <= last_snapshot_tick:
 		return
 	last_snapshot_tick = host_tick
 	last_sync_ms = Time.get_ticks_msec()
+	body.turn_rate = turn_rate
 	directions = inputs
 	for i in walkers.size():
 		warn_until[i] = tick + maxi(0, warnings[i] - host_tick)
