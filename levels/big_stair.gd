@@ -2,7 +2,8 @@ extends "res://levels/sky_course.gd"
 
 enum Section { TERRACE, FORK, UPDRAFT }
 
-const WIDTH := 34.0
+const WIDTH := 44.0
+const STEP_COUNT := 19
 const REACH := 12.0
 var passages: Array[AABB] = []
 var layout_seed: int
@@ -13,12 +14,12 @@ func _ready() -> void:
 	rng.seed = layout_seed
 	var edge := 11.0
 	var heights := PackedFloat32Array([0.0])
-	for i in 14:
+	for i in STEP_COUNT + 1:
 		heights.append(heights[-1] + rng.randf_range(4.5, 7.5))
 	var section_order: Array[int] = [Section.TERRACE, Section.FORK, Section.UPDRAFT]
 	var previous_ceiling := heights[2] + 3.0
-	for i in 13:
-		var depth := rng.randf_range(12, 18)
+	for i in STEP_COUNT:
+		var depth := rng.randf_range(16, 23)
 		if i == 0:
 			depth += 4.0
 		var top := heights[i]
@@ -46,15 +47,18 @@ func _ready() -> void:
 			section_order[pick] = section_order[slot]
 			section_order[slot] = chosen
 			var side := 1 if rng.randf() < 0.5 else -1
-			add_section(chosen, side, top, heights[i + 1] - top, edge, depth, rng)
+			add_section(chosen, side, top, heights[i + 1] - top, edge, depth, i, rng)
 		edge -= depth
+		if i == STEP_COUNT - 1:
+			block(Vector3(0, (top + ceiling)/2, edge - 0.25),
+				Vector3(WIDTH + 1.6, ceiling - top, 0.5), wall_color)
 	signboard(Vector3(-3, 0, 2), "Big Stair\nE — взяться за руки\nПоднимайтесь по ступеням")
 
 # One side holds the traversal feature. The opposite side stays open,
-# with two staggered pairs of mines that can be threaded or flown over.
-func add_section(kind: int, side: int, top: float, rise: float, edge: float, depth: float, rng: RandomNumberGenerator) -> void:
+# with staggered mines that can be threaded or flown over.
+func add_section(kind: int, side: int, top: float, rise: float, edge: float, depth: float, step: int, rng: RandomNumberGenerator) -> void:
 	var middle := edge - depth * 0.5
-	var lane := side * 9.0
+	var lane := side * 11.0
 	match kind:
 		Section.TERRACE:
 			var height := rise * 0.5
@@ -70,10 +74,19 @@ func add_section(kind: int, side: int, top: float, rise: float, edge: float, dep
 			# A raised launch pad aims the air stream at the next step.
 			block(Vector3(lane, top + 0.45, middle), Vector3(8, 0.9, 7), Color("#5079aa"))
 			add_vent(Vector3(lane, top + 1.04, middle), Vector3(0, 1, -0.75).normalized())
-	for row in 2:
+	if step >= 7:
+		# Narrow the mine route without blocking the assisted route on the other side.
+		var wall_x := -side * (WIDTH/2 - 5)
+		block(Vector3(wall_x, top + 2.5, middle), Vector3(10, 5, 1.2), Color("#80529f"))
+	if step >= 13:
+		# Offset the fast high route with a sideways gust near the next riser.
+		add_vent(Vector3(side * (WIDTH/2 - 0.12), top + 5, edge - depth * 0.85),
+			Vector3(-side, 0.08, 0.32).normalized())
+	var rows := 2 if step < 7 else 3
+	for row in rows:
 		for column in 2:
-			var x := -side * (4.0 + column * 7.0 + row * 1.6 + rng.randf_range(-0.6, 0.6))
-			var z := edge - depth * (0.26 + row * 0.48)
+			var x := -side * (5.0 + column * 8.0 + (row % 2) * 2.0 + rng.randf_range(-0.6, 0.6))
+			var z := edge - depth * lerpf(0.2, 0.82, float(row) / (rows - 1))
 			create_mine(Vector3(x, top + rng.randf_range(1.6, 4.8), z))
 
 # Keep the sweep origin inside the passage, including both sides of a step seam.

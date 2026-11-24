@@ -48,7 +48,7 @@ func run() -> void:
 		if lobby.arena and not voted and (host or walked):
 			if OS.get_cmdline_user_args().has("stairs"):
 				var course = lobby.arena.get_node("SkyCourse")
-				assert(course.mines.size() == 48 and course.vents.size() == 12)
+				assert(course.passages.size() == 19 and course.mines.size() == 96 and course.vents.size() == 24)
 				print("Layout ", course.layout_seed, " ", course.mines[-1].position)
 				var vent: Node3D = course.vents[0]
 				assert(course.wind_at(vent.position + vent.basis.y).dot(vent.basis.y) > 0)
