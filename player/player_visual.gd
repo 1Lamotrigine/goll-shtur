@@ -8,9 +8,6 @@ var grounded := true
 const FLICK_DURATION := 0.24
 @onready var left: Node3D = $Rig/LeftArm
 @onready var right: Node3D = $Rig/RightArm
-@onready var form: MeshInstance3D = $Rig/LeftArm/Form
-@onready var shoulder_rest := left.transform
-@onready var form_rest := form.transform
 var linked := false
 var grip_target := Vector3.ZERO
 var reach_progress := 0.0
@@ -23,24 +20,54 @@ func prepare_grip(target: Vector3) -> void:
 	visibility_changed.connect(func():
 		reach_progress = 0.0
 		flick_remaining = 0.0
-		left.transform = shoulder_rest
-		form.transform = form_rest
 	)
 
 func flick_arm() -> void:
 	flick_remaining = FLICK_DURATION
 
-func animate_grip(delta: float, sway: float, flick: float) -> void:
-	reach_progress = move_toward(reach_progress, 1.0, delta / 0.28)
-	var weight := smoothstep(0.0, 1.0, reach_progress)
-	left.position = shoulder_rest.origin + Vector3.UP * (flick * 0.24 + sway * 0.045) * weight
-	var reach := grip_target - left.position
-	left.quaternion = shoulder_rest.basis.get_rotation_quaternion().slerp(
-		Quaternion(Vector3.DOWN, reach.normalized()), weight)
-	form.scale.y = lerpf(form_rest.basis.get_scale().y, reach.length() / form.mesh.get_aabb().size.y, weight)
-	form.position.y = lerpf(form_rest.origin.y, -reach.length() * 0.5, weight)
-	right.rotation.x = sway * 0.15
-	right.rotation.z = 0.49 + sway * 0.1
+func _physics_process(delta: float) -> void:
+	if not is_visible_in_tree():
+		return
+	sway_phase += delta * 4.0
+	var previous_flick := flick_remaining
+	flick_remaining = maxf(0, flick_remaining - delta)
+	var flick := sin(PI * (1 - flick_remaining / FLICK_DURATION))
+	var grip := to_global(grip_target)
+	if linked and reach_progress < 1:
+		reach_progress = move_toward(reach_progress, 1, delta / 0.28)
+		grip = left.global_position.lerp(grip, smoothstep(0, 1, reach_progress))
+	left.simulate(delta, sin(sway_phase), flick, linked, grip)
+	right.simulate(delta, cos(sway_phase), 0, false, Vector3.ZERO)
+	if previous_flick > 0.16 and flick_remaining <= 0.16:
+		milk_puff(left.points[5] + Vector3.UP * 0.16)
+
+func milk_puff(at: Vector3) -> void:
+	var puff := CPUParticles3D.new()
+	var drop := SphereMesh.new()
+	drop.radius = 0.034
+	drop.height = 0.11
+	drop.radial_segments = 6
+	drop.rings = 3
+	var milk := StandardMaterial3D.new()
+	milk.albedo_color = Color.FLORAL_WHITE
+	milk.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	drop.material = milk
+	puff.mesh = drop
+	puff.amount = 8
+	puff.one_shot = true
+	puff.explosiveness = 1
+	puff.lifetime = 0.23
+	puff.direction = Vector3.UP
+	puff.spread = 32
+	puff.initial_velocity_min = 3
+	puff.initial_velocity_max = 5
+	puff.gravity = Vector3.DOWN * 6
+	puff.emitting = false
+	add_child(puff)
+	puff.top_level = true
+	puff.global_position = at
+	puff.finished.connect(puff.queue_free)
+	puff.emitting = true
 
 func paint(material: Material) -> void:
 	for part in $Rig.find_children("*", "MeshInstance3D", true, false):
@@ -49,12 +76,7 @@ func paint(material: Material) -> void:
 func _process(delta: float) -> void:
 	if not is_visible_in_tree():
 		return
-	sway_phase = fposmod(sway_phase + delta * 4.0, TAU * 4.0)
-	flick_remaining = maxf(0.0, flick_remaining - delta)
-	var flick := sin(PI * pow(1.0 - flick_remaining / FLICK_DURATION, 0.65))
-	var sway := sin(sway_phase)
 	if linked:
-		animate_grip(delta, sway, flick)
 		return
 	var horizontal := Vector2(speed.x, speed.z)
 	stride = move_toward(stride, minf(horizontal.length() / 5.0, 1.0) if grounded else 0.0, delta * 7)
@@ -67,9 +89,3 @@ func _process(delta: float) -> void:
 	$Rig.position.y = absf(step) * 0.065
 	$Rig/LeftLeg.rotation.x = step * 0.63 - airborne * 0.45
 	$Rig/RightLeg.rotation.x = -step * 0.63 - airborne * 0.65
-	# Offset the swing and roll so the hands flop independently at rest and in motion.
-	var right_sway := sin(sway_phase * 1.25 + 1.2)
-	left.rotation.x = -step * 0.46 + sway * 0.36 - flick * 0.65
-	right.rotation.x = step * 0.46 + right_sway * 0.38
-	left.rotation.z = -0.49 - airborne * 0.75 + step * 0.12 + cos(sway_phase) * 0.22
-	right.rotation.z = 0.49 + airborne * 0.75 + step * 0.12 - cos(sway_phase * 1.25 + 1.2) * 0.24
