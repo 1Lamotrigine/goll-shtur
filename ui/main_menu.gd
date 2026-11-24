@@ -2,7 +2,8 @@ extends Control
 
 var peer: ENetMultiplayerPeer
 var members := {}
-const WIRE_VERSION := 3
+const WIRE_VERSION := 4
+var map_type := 0
 var status := ""
 var room_code := ""
 var discovery := PacketPeerUDP.new()
@@ -15,6 +16,13 @@ const DISCOVERY_PORT := 24568
 const COLORS := ["Красный", "Синий", "Оранжевый", "Зелёный", "Фиолетовый", "Жёлтый"]
 
 func _ready() -> void:
+	$Center/Menu/Map.add_item("Карта · Луг")
+	$Center/Menu/Map.add_item("Карта · Big Stair")
+	$Center/Menu/Map.item_selected.connect(func(index: int):
+		if peer and multiplayer.is_server():
+			map_type = index
+			publish()
+	)
 	$Center/Menu/Training.pressed.connect(func(): get_tree().change_scene_to_file("res://levels/test_arena.tscn"))
 	$Center/Menu/Quit.pressed.connect(func(): get_tree().quit())
 	$Center/Menu/Host.pressed.connect(host_room)
@@ -95,6 +103,7 @@ func close_room(message: String) -> void:
 		peer.close()
 		peer = null
 	members.clear()
+	map_type = 0
 	status = message
 	refresh()
 
@@ -151,11 +160,12 @@ func change_ready(id: int) -> void:
 		publish()
 
 func publish() -> void:
-	room_state.rpc(members, room_code)
+	room_state.rpc(members, room_code, map_type)
 	refresh()
 
 @rpc("authority", "reliable")
-func room_state(roster: Dictionary, code: String) -> void:
+func room_state(roster: Dictionary, code: String, selected_map: int) -> void:
+	map_type = selected_map
 	members = roster
 	room_code = code
 	if arena and arena.members.size() != members.size():
@@ -164,6 +174,9 @@ func room_state(roster: Dictionary, code: String) -> void:
 	refresh()
 
 func refresh() -> void:
+	$Center/Menu/Map.visible = peer != null
+	$Center/Menu/Map.disabled = peer == null or not multiplayer.is_server()
+	$Center/Menu/Map.select(map_type)
 	for control in [$Center/Menu/Host, $Center/Menu/Join, $Center/Menu/Nick, $Center/Menu/Address, $Center/Menu/Port, $Center/Menu/Training]:
 		control.visible = peer == null and searching.is_empty()
 	$Center/Menu/Ready.visible = peer != null and members.has(multiplayer.get_unique_id())
@@ -209,14 +222,20 @@ func _process(_delta: float) -> void:
 func start_match() -> void:
 	if multiplayer.is_server() and members.size() >= 2 and members.values().all(func(m): return m.ready):
 		peer.refuse_new_connections = true
-		open_arena.rpc()
+		open_arena.rpc(map_type, randi())
 
 @rpc("authority", "call_local", "reliable")
-func open_arena() -> void:
+func open_arena(selected_map: int, layout_seed: int) -> void:
 	if arena:
 		return
 	arena = preload("res://levels/test_arena.tscn").instantiate()
 	arena.set_script(preload("res://levels/network_arena.gd"))
+	if selected_map == 1:
+		for child_name in ["Meadow", "OuterMeadow", "Floor"]:
+			arena.get_node(child_name).free()
+		var stairs := arena.get_node("SkyCourse")
+		stairs.set_script(preload("res://levels/big_stair.gd"))
+		stairs.set("layout_seed", layout_seed)
 	arena.name = "OnlineArena"
 	arena.members = members.duplicate(true)
 	var ids := members.keys()

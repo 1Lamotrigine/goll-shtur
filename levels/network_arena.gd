@@ -16,9 +16,12 @@ var last_snapshot_tick := -1
 var last_sync_ms := 0
 var local_slot: int
 var tick := 0
+var wind_course: Node3D
 @onready var body := $Polygon
 
 func _ready() -> void:
+	if $SkyCourse.has_method("wind_at"):
+		wind_course = $SkyCourse
 	$SkyCourse.chain_hit.connect(break_chain)
 	directions.resize(members.size())
 	directions.fill(Vector2.ZERO)
@@ -74,6 +77,9 @@ func _physics_process(delta: float) -> void:
 				walker.velocity.x = move.x
 				walker.velocity.z = move.y
 				walker.velocity.y -= walker.get_gravity().length() * delta
+				if wind_course:
+					var wind: Vector3 = wind_course.wind_at(walker.position)
+					walker.velocity += Vector3(wind.x, wind.y * delta, wind.z)
 				walker.move_and_slide()
 				walker.get_node("Player").speed = walker.get_real_velocity()
 				walker.get_node("Player").grounded = walker.is_on_floor()
@@ -81,6 +87,10 @@ func _physics_process(delta: float) -> void:
 					walker.position = body.spawn.origin + body.slots[i]
 					walker.velocity = Vector3.ZERO
 		if joined:
+			if wind_course:
+				var wind: Vector3 = wind_course.wind_at(body.position)
+				if wind != Vector3.ZERO:
+					body.apply_central_force(wind * body.mass)
 			var turn_balance := 0
 			for input_direction: Vector2 in directions:
 				turn_balance -= int(signf(input_direction.x))

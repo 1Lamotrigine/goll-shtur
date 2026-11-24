@@ -12,6 +12,8 @@ func run() -> void:
 	lobby.get_node("Center/Menu/Port").value = 39467
 	if host:
 		lobby.host_room()
+		if OS.get_cmdline_user_args().has("stairs"):
+			lobby.get_node("Center/Menu/Map").item_selected.emit(1)
 		print("ROOM ", lobby.room_code)
 	else:
 		lobby.get_node("Center/Menu/Address").text = OS.get_cmdline_user_args()[0]
@@ -44,6 +46,12 @@ func run() -> void:
 			if walked:
 				print("PASS guest displays horizontal movement")
 		if lobby.arena and not voted and (host or walked):
+			if OS.get_cmdline_user_args().has("stairs"):
+				var course = lobby.arena.get_node("SkyCourse")
+				assert(course.mines.size() == 48 and course.vents.size() == 12)
+				print("Layout ", course.layout_seed, " ", course.mines[-1].position)
+				var vent: Node3D = course.vents[0]
+				assert(course.wind_at(vent.position + vent.basis.y).dot(vent.basis.y) > 0)
 			voted = true
 			if host:
 				lobby.arena.act(0, true)

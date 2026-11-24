@@ -54,6 +54,9 @@ text = "Присоединиться"
 
 [node name="Roster" type="Label" parent="Center/Menu"]
 
+[node name="Map" type="OptionButton" parent="Center/Menu"]
+visible = false
+
 [node name="Ready" type="Button" parent="Center/Menu"]
 text = "Готов / отменить готовность"
 
