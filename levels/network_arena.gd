@@ -17,6 +17,8 @@ var last_sync_ms := 0
 var local_slot: int
 var tick := 0
 var recoil := PackedVector3Array()
+var camera_clearance := SphereShape3D.new()
+var camera_distance := 9.0
 var stair_camera_position := Vector3.ZERO
 var wind_course: Node3D
 @onready var body := $Polygon
@@ -24,6 +26,7 @@ var wind_course: Node3D
 func _ready() -> void:
 	if $SkyCourse.has_method("wind_at"):
 		wind_course = $SkyCourse
+		camera_clearance.radius = 0.32
 	$SkyCourse.explosion.connect(on_explosion)
 	recoil.resize(members.size())
 	directions.resize(members.size())
@@ -149,13 +152,20 @@ func _process(delta: float) -> void:
 	var focus: Vector3 = body.position if joined else walkers[local_slot].position
 	if wind_course:
 		var pivot := focus + Vector3.UP * 0.55
-		var desired := pivot + Vector3(0, 2, 7)
+		var desired := pivot + Vector3(0, 2.3, 8.8)
 		if stair_camera_position == Vector3.ZERO:
 			stair_camera_position = desired
 		stair_camera_position = stair_camera_position.lerp(desired, 1.0-exp(-16*delta))
-		var query := PhysicsRayQueryParameters3D.create(pivot, stair_camera_position, 2)
-		var hit := get_world_3d().direct_space_state.intersect_ray(query)
-		$Camera.position = stair_camera_position if hit.is_empty() else Vector3(hit.position).move_toward(pivot, 0.35)
+		var arm := stair_camera_position - pivot
+		var query := PhysicsShapeQueryParameters3D.new()
+		query.shape = camera_clearance
+		query.transform.origin = pivot
+		query.motion = arm
+		query.collision_mask = 2
+		var fraction := get_world_3d().direct_space_state.cast_motion(query)[0]
+		var available := arm.length() * fraction
+		camera_distance = minf(available, lerpf(camera_distance, available, 1.0 - exp(-5 * delta)))
+		$Camera.position = pivot + arm.normalized() * camera_distance
 		$Camera.rotation = Vector3(-0.08, 0, 0)
 		return
 	var offset := Vector3(7,6,9)

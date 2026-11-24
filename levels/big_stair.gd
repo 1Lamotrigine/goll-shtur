@@ -1,6 +1,6 @@
 extends "res://levels/sky_course.gd"
 
-const WIDTH := 25.0
+const WIDTH := 34.0
 const REACH := 12.0
 var layout_seed: int
 var vents: Array[Node3D] = []
@@ -8,15 +8,17 @@ var vents: Array[Node3D] = []
 func _ready() -> void:
 	var rng := RandomNumberGenerator.new()
 	rng.seed = layout_seed
-	var edge := 7.0
+	var edge := 11.0
 	var heights := PackedFloat32Array([0.0])
 	for i in 14:
 		heights.append(heights[-1] + rng.randf_range(4.5, 7.5))
-	var previous_ceiling := heights[2]
+	var previous_ceiling := heights[2] + 3.0
 	for i in 13:
 		var depth := rng.randf_range(12, 18)
+		if i == 0:
+			depth += 4.0
 		var top := heights[i]
-		var ceiling := heights[i + 2]
+		var ceiling := heights[i + 2] + 3.0
 		var middle := edge - depth * 0.5
 		var tint := Color.from_hsv(rng.randf_range(0.725, 0.78), 0.52, 0.69)
 		block(Vector3(0, (top - 4) * 0.5, middle), Vector3(WIDTH, top + 4, depth), tint)

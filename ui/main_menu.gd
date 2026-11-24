@@ -2,7 +2,7 @@ extends Control
 
 var peer: ENetMultiplayerPeer
 var members := {}
-const WIRE_VERSION := 5
+const WIRE_VERSION := 6
 var map_type := 0
 var status := ""
 var room_code := ""
