@@ -17,13 +17,13 @@ func _ready() -> void:
 	for i in STEP_COUNT + 1:
 		heights.append(heights[-1] + rng.randf_range(4.5, 7.5))
 	var section_order: Array[int] = [Section.TERRACE, Section.FORK, Section.UPDRAFT]
-	var previous_ceiling := heights[2] + 3.0
+	var previous_ceiling := 0.0
 	for i in STEP_COUNT:
 		var depth := rng.randf_range(16, 23)
 		if i == 0:
 			depth += 4.0
 		var top := heights[i]
-		var ceiling := heights[i + 2] + 3.0
+		var ceiling := top + 2.0 * (heights[i + 2] - top + 3.0)
 		passages.append(AABB(Vector3(-WIDTH/2, top, edge - depth), Vector3(WIDTH, ceiling - top, depth)))
 		var middle := edge - depth * 0.5
 		var tint := Color.from_hsv(rng.randf_range(0.725, 0.78), 0.52, 0.69)
@@ -35,7 +35,9 @@ func _ready() -> void:
 		block(Vector3(0, ceiling + 0.25, middle), Vector3(WIDTH + 1.6, 0.5, depth), tint.lightened(0.16))
 		# Seal the vertical face between adjacent ceiling sections.
 		if i > 0:
-			block(Vector3(0, (ceiling + previous_ceiling)/2, edge + 0.15), Vector3(WIDTH + 1.6, ceiling - previous_ceiling, 0.3), wall_color)
+			var seam_depth := 0.3 if ceiling > previous_ceiling else -0.3
+			block(Vector3(0, (ceiling + previous_ceiling)/2, edge + seam_depth/2),
+				Vector3(WIDTH + 1.6, maxf(0.01, absf(ceiling - previous_ceiling)), absf(seam_depth)), wall_color)
 		else:
 			block(Vector3(0, ceiling/2, edge + 0.25), Vector3(WIDTH + 1.6, ceiling, 0.5), wall_color)
 		previous_ceiling = ceiling

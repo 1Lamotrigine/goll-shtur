@@ -42,12 +42,10 @@ func _process(_delta: float) -> void:
 	arrow.hide()
 	if not is_visible_in_tree() or tilt.length_squared() < 0.0004:
 		return
-	var query := PhysicsRayQueryParameters3D.create(global_position, global_position + Vector3.DOWN * 500, 1, [get_rid()])
-	var hit := get_world_3d().direct_space_state.intersect_ray(query)
-	if not hit.is_empty():
-		arrow.global_position = hit.position + Vector3.UP * 0.08
-		arrow.look_at(arrow.global_position + tilt, Vector3.UP)
-		arrow.show()
+	var clearance := 0.65 + radius * tilt.length()
+	arrow.global_position = global_position + Vector3.DOWN * clearance
+	arrow.look_at(arrow.global_position + tilt, Vector3.UP)
+	arrow.show()
 
 var spawn: Transform3D
 
