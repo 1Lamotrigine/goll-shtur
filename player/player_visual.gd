@@ -49,7 +49,7 @@ func paint(material: Material) -> void:
 func _process(delta: float) -> void:
 	if not is_visible_in_tree():
 		return
-	sway_phase += delta * 4.0
+	sway_phase = fposmod(sway_phase + delta * 4.0, TAU * 4.0)
 	flick_remaining = maxf(0.0, flick_remaining - delta)
 	var flick := sin(PI * pow(1.0 - flick_remaining / FLICK_DURATION, 0.65))
 	var sway := sin(sway_phase)
@@ -67,7 +67,9 @@ func _process(delta: float) -> void:
 	$Rig.position.y = absf(step) * 0.065
 	$Rig/LeftLeg.rotation.x = step * 0.63 - airborne * 0.45
 	$Rig/RightLeg.rotation.x = -step * 0.63 - airborne * 0.65
-	$Rig/LeftArm.rotation.x = -step * 0.46 + sway * 0.12 - flick * 0.65
-	$Rig/RightArm.rotation.x = step * 0.46 - sway * 0.14
-	$Rig/LeftArm.rotation.z = -0.49 - airborne * 0.75 + step * 0.12
-	$Rig/RightArm.rotation.z = 0.49 + airborne * 0.75 + step * 0.12
+	# Offset the swing and roll so the hands flop independently at rest and in motion.
+	var right_sway := sin(sway_phase * 1.25 + 1.2)
+	left.rotation.x = -step * 0.46 + sway * 0.36 - flick * 0.65
+	right.rotation.x = step * 0.46 + right_sway * 0.38
+	left.rotation.z = -0.49 - airborne * 0.75 + step * 0.12 + cos(sway_phase) * 0.22
+	right.rotation.z = 0.49 + airborne * 0.75 + step * 0.12 - cos(sway_phase * 1.25 + 1.2) * 0.24
