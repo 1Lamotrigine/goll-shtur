@@ -39,7 +39,7 @@ func _physics_process(delta: float) -> void:
 	left.simulate(delta, sin(sway_phase), flick, linked, grip)
 	right.simulate(delta, cos(sway_phase), 0, false, Vector3.ZERO)
 	if previous_flick > 0.16 and flick_remaining <= 0.16:
-		milk_puff(left.points[5] + Vector3.UP * 0.16)
+		milk_puff(left.points[-1])
 
 func milk_puff(at: Vector3) -> void:
 	var puff := CPUParticles3D.new()
