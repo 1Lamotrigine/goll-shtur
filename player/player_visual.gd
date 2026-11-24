@@ -81,11 +81,21 @@ func _process(delta: float) -> void:
 	var horizontal := Vector2(speed.x, speed.z)
 	stride = move_toward(stride, minf(horizontal.length() / 5.0, 1.0) if grounded else 0.0, delta * 7)
 	airborne = move_toward(airborne, 0.0 if grounded else 1.0, delta * 8)
-	phase += delta * 8 * stride
+	var run := smoothstep(5.0, 8.5, horizontal.length())
+	phase = fposmod(phase + delta * lerpf(8.0, 13.0, run) * stride, TAU * 2)
 	var step := sin(phase) * stride
 	if horizontal.length() > 0.1:
 		rotation.y = lerp_angle(rotation.y, atan2(speed.x, speed.z), 1 - exp(-10 * delta))
-	$Rig.rotation.z = step * 0.17 + sin(phase * 0.5) * stride * 0.08
-	$Rig.position.y = absf(step) * 0.065
-	$Rig/LeftLeg.rotation.x = step * 0.63 - airborne * 0.45
-	$Rig/RightLeg.rotation.x = -step * 0.63 - airborne * 0.65
+	var bounce := absf(step)
+	var breath := sin(sway_phase * 0.7) * (1 - stride) * (1 - airborne)
+	$Rig.rotation.x = run * stride * 0.27 - airborne * 0.09
+	$Rig.rotation.y = step * 0.21
+	$Rig.rotation.z = step * 0.31 + sin(phase * 0.5) * stride * 0.08
+	$Rig.position.x = step * 0.105
+	$Rig.position.y = bounce * lerpf(0.10, 0.19, run) + breath * 0.018
+	var stretch := (bounce - 0.5 * stride) * 0.13 + airborne * 0.055 + breath * 0.014
+	$Rig/Body.scale = Vector3(0.94 * (1 - stretch * 0.5), 0.87 * (1 + stretch), 0.76)
+	$Rig/LeftLeg.rotation.z = -maxf(step, 0) * 0.35
+	$Rig/RightLeg.rotation.z = maxf(-step, 0) * 0.35
+	$Rig/LeftLeg.rotation.x = step * lerpf(0.82, 1.14, run) - airborne * 0.45
+	$Rig/RightLeg.rotation.x = -step * lerpf(0.82, 1.14, run) - airborne * 0.65

@@ -2,6 +2,9 @@ extends Node3D
 
 var members: Dictionary
 var walkers: Array[CharacterBody3D] = []
+const WALK_SPEED := 5.0
+const RUN_SPEED := 8.5
+var running := PackedByteArray()
 var directions := []
 @export_range(1.0, 10.0, 0.1) var link_distance := 4.5
 var votes := []
@@ -41,6 +44,7 @@ func _ready() -> void:
 		camera.rotation.x = -0.08 - stair_arm.rotation.x
 	$SkyCourse.explosion.connect(on_explosion)
 	recoil.resize(members.size())
+	running.resize(members.size())
 	directions.resize(members.size())
 	directions.fill(Vector2.ZERO)
 	votes.resize(members.size())
@@ -86,12 +90,14 @@ func _physics_process(delta: float) -> void:
 	tick += 1
 	var direction := Vector2(float(Input.is_physical_key_pressed(KEY_D)) - float(Input.is_physical_key_pressed(KEY_A)), float(Input.is_physical_key_pressed(KEY_S)) - float(Input.is_physical_key_pressed(KEY_W))).limit_length()
 	if multiplayer.is_server():
+		running[local_slot] = int(Input.is_physical_key_pressed(KEY_SHIFT))
 		directions[local_slot] = direction
 		for i in members.size():
 			body.cooldown[i] = maxf(0, body.cooldown[i] - delta)
 			if not joined:
 				var walker := walkers[i]
-				var move: Vector2 = directions[i].rotated(0.0 if wind_course else -atan2(7,9)) * 5
+				var pace := RUN_SPEED if running[i] else WALK_SPEED
+				var move: Vector2 = directions[i].rotated(0.0 if wind_course else -atan2(7,9)) * pace
 				walker.velocity.x = move.x + recoil[i].x
 				walker.velocity.z = move.y + recoil[i].z
 				walker.velocity.y -= walker.get_gravity().length() * delta
@@ -135,7 +141,7 @@ func _physics_process(delta: float) -> void:
 		if tick % 3 == 0:
 			send_state()
 	elif tick % 2 == 0:
-		movement.rpc_id(1, direction)
+		movement.rpc_id(1, direction, Input.is_physical_key_pressed(KEY_SHIFT))
 		var now := Time.get_ticks_msec()
 		if now - last_sync_ms >= 1000:
 			last_sync_ms = now
@@ -153,7 +159,7 @@ func _physics_process(delta: float) -> void:
 		prompts[i].modulate = Color.ORANGE_RED if tick < warn_until[i] else Color.WHITE
 		prompts[i].text = "Слишком далеко" if tick < warn_until[i] else ("✓" if votes[i] else ("E — взяться за руки" if i == local_slot and group_is_close() else ""))
 	$Overlay/Hud.text = "Игрок %d   •   Esc — выйти\n" % (local_slot+1)
-	$Overlay/Hud.text += "A/D — поворот   Space — поднять соседа   X — разорвать" if joined else "WASD — ходьба   Space — прыжок   E — соединиться (%d/%d)" % [votes.count(true), members.size()]
+	$Overlay/Hud.text += "A/D — поворот   Space — поднять соседа   X — разорвать" if joined else "WASD — ходьба   Shift — бег   Space — прыжок   E — соединиться (%d/%d)" % [votes.count(true), members.size()]
 
 	if not joined and not group_is_close():
 		$Overlay/Hud.text += "\nСоберитесь ближе: между любыми двумя игроками — до %.1f м" % link_distance
@@ -188,9 +194,10 @@ func _unhandled_key_input(event: InputEvent) -> void:
 			action.rpc_id(1, event.physical_keycode == KEY_E)
 
 @rpc("any_peer","unreliable_ordered")
-func movement(direction: Vector2) -> void:
+func movement(direction: Vector2, sprint: bool) -> void:
 	var id := multiplayer.get_remote_sender_id()
 	if multiplayer.is_server() and members.has(id) and direction.is_finite():
+		running[members[id].slot] = int(sprint)
 		directions[members[id].slot] = direction.limit_length()
 
 @rpc("any_peer","reliable")
