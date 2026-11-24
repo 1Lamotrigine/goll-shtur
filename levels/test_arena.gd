@@ -8,7 +8,7 @@ const OFFSET := Vector3(7, 6, 9)
 var fragments: Array[RigidBody3D] = []
 
 func _ready() -> void:
-	$SkyCourse.chain_hit.connect(break_chain)
+	$SkyCourse.explosion.connect(break_chain.bind(true))
 	body.control_yaw = true
 	camera.position = body.position + OFFSET
 	camera.look_at(body.position)
@@ -39,7 +39,7 @@ func _unhandled_input(event: InputEvent) -> void:
 	elif event.is_action_pressed("ui_cancel", false):
 		get_tree().change_scene_to_file("res://ui/main_menu.tscn")
 
-func break_chain(origin: Vector3) -> void:
+func break_chain(origin: Vector3, blasted := false) -> void:
 	if not fragments.is_empty():
 		return
 	for i in body.slots.size():
@@ -56,6 +56,9 @@ func break_chain(origin: Vector3) -> void:
 		avatar.paint(color)
 		avatar.get_node("Number").text = str(i + 1)
 		piece.linear_velocity = body.linear_velocity + (piece.position - origin).normalized() * 4 + Vector3.UP * 2
+		if blasted:
+			piece.linear_velocity = body.linear_velocity
+			piece.apply_central_impulse($SkyCourse.blast_velocity(piece.position, origin) * piece.mass)
 		fragments.append(piece)
 	body.freeze = true
 	body.set_physics_process(false)

@@ -9,16 +9,28 @@ func _ready() -> void:
 	var rng := RandomNumberGenerator.new()
 	rng.seed = layout_seed
 	var edge := 7.0
-	var top := 0.0
+	var heights := PackedFloat32Array([0.0])
+	for i in 14:
+		heights.append(heights[-1] + rng.randf_range(4.5, 7.5))
+	var previous_ceiling := heights[2]
 	for i in 13:
 		var depth := rng.randf_range(12, 18)
-		if i > 0:
-			top += rng.randf_range(4.5, 7.5)
+		var top := heights[i]
+		var ceiling := heights[i + 2]
 		var middle := edge - depth * 0.5
 		var tint := Color.from_hsv(rng.randf_range(0.725, 0.78), 0.52, 0.69)
 		block(Vector3(0, (top - 4) * 0.5, middle), Vector3(WIDTH, top + 4, depth), tint)
 		block(Vector3(0, top - 0.14, middle), Vector3(WIDTH, 0.28, depth), tint.lightened(0.32))
-		block(Vector3(-WIDTH/2 - 0.4, top + 3, middle), Vector3(0.8, 6, depth), tint.darkened(0.25))
+		var wall_color := tint.darkened(0.22)
+		for side in [-1, 1]:
+			block(Vector3(side * (WIDTH/2 + 0.4), (ceiling + top)/2, middle), Vector3(0.8, ceiling - top, depth), wall_color)
+		block(Vector3(0, ceiling + 0.25, middle), Vector3(WIDTH + 1.6, 0.5, depth), tint.lightened(0.16))
+		# Seal the vertical face between adjacent ceiling sections.
+		if i > 0:
+			block(Vector3(0, (ceiling + previous_ceiling)/2, edge + 0.15), Vector3(WIDTH + 1.6, ceiling - previous_ceiling, 0.3), wall_color)
+		else:
+			block(Vector3(0, ceiling/2, edge + 0.25), Vector3(WIDTH + 1.6, ceiling, 0.5), wall_color)
+		previous_ceiling = ceiling
 		if i > 0:
 			for lane in 4:
 				var x := -WIDTH/2 + (lane + rng.randf_range(0.22, 0.78)) * WIDTH/4
@@ -32,6 +44,7 @@ func _ready() -> void:
 
 func block(at: Vector3, size: Vector3, tint: Color) -> void:
 	var solid := StaticBody3D.new()
+	solid.collision_layer = 3 # World geometry and camera obstacles.
 	add_child(solid)
 	solid.position = at
 	var mesh := BoxMesh.new()

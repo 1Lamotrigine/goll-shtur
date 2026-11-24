@@ -1,6 +1,6 @@
 extends Node3D
 
-signal chain_hit(origin: Vector3)
+signal explosion(origin: Vector3)
 
 const LANDINGS := [Vector3(-24, 15, -15), Vector3(-45, 30, -42), Vector3(-81, 45, -51), Vector3(-105, 63, -84), Vector3(-135, 81, -108)]
 var mines: Array[Area3D] = []
@@ -93,12 +93,16 @@ func create_mine(point: Vector3) -> void:
 func contact(body: Node3D, index: int) -> void:
 	if spent.has(index) or not (body is CharacterBody3D or body == get_node("../Polygon")):
 		return
-	if body == get_node("../Polygon"):
-		chain_hit.emit.call_deferred(mines[index].position)
+	explosion.emit.call_deferred(mines[index].position)
 	if multiplayer.get_peers().is_empty():
 		burst(index)
 	else:
 		burst.rpc(index)
+
+func blast_velocity(point: Vector3, origin: Vector3) -> Vector3:
+	var offset := point - origin
+	var strength := clampf(1.0 - offset.length() / 8.0, 0, 1)
+	return (offset.normalized() + Vector3.UP * 0.48).normalized() * 21 * strength
 
 @rpc("authority", "call_local", "reliable")
 func burst(index: int) -> void:

@@ -16,13 +16,16 @@ var last_snapshot_tick := -1
 var last_sync_ms := 0
 var local_slot: int
 var tick := 0
+var recoil := PackedVector3Array()
+var stair_camera_position := Vector3.ZERO
 var wind_course: Node3D
 @onready var body := $Polygon
 
 func _ready() -> void:
 	if $SkyCourse.has_method("wind_at"):
 		wind_course = $SkyCourse
-	$SkyCourse.chain_hit.connect(break_chain)
+	$SkyCourse.explosion.connect(on_explosion)
+	recoil.resize(members.size())
 	directions.resize(members.size())
 	directions.fill(Vector2.ZERO)
 	votes.resize(members.size())
@@ -73,19 +76,25 @@ func _physics_process(delta: float) -> void:
 			body.cooldown[i] = maxf(0, body.cooldown[i] - delta)
 			if not joined:
 				var walker := walkers[i]
-				var move: Vector2 = directions[i].rotated(-atan2(7,9)) * 5
-				walker.velocity.x = move.x
-				walker.velocity.z = move.y
+				var move: Vector2 = directions[i].rotated(0.0 if wind_course else -atan2(7,9)) * 5
+				walker.velocity.x = move.x + recoil[i].x
+				walker.velocity.z = move.y + recoil[i].z
 				walker.velocity.y -= walker.get_gravity().length() * delta
 				if wind_course:
 					var wind: Vector3 = wind_course.wind_at(walker.position)
 					walker.velocity += Vector3(wind.x, wind.y * delta, wind.z)
 				walker.move_and_slide()
+				for collision_index in walker.get_slide_collision_count():
+					var normal := walker.get_slide_collision(collision_index).get_normal()
+					if recoil[i].dot(normal) < 0:
+						recoil[i] = recoil[i].slide(normal)
+				recoil[i] = recoil[i].move_toward(Vector3.ZERO, delta * 11)
 				walker.get_node("Player").speed = walker.get_real_velocity()
 				walker.get_node("Player").grounded = walker.is_on_floor()
 				if walker.position.y < -10:
 					walker.position = body.spawn.origin + body.slots[i]
 					walker.velocity = Vector3.ZERO
+					recoil[i] = Vector3.ZERO
 		if joined:
 			if wind_course:
 				var wind: Vector3 = wind_course.wind_at(body.position)
@@ -138,6 +147,17 @@ func _process(delta: float) -> void:
 		for i in walkers.size():
 			walkers[i].position = walkers[i].position.lerp(target_positions[i], weight)
 	var focus: Vector3 = body.position if joined else walkers[local_slot].position
+	if wind_course:
+		var pivot := focus + Vector3.UP * 0.55
+		var desired := pivot + Vector3(0, 2, 7)
+		if stair_camera_position == Vector3.ZERO:
+			stair_camera_position = desired
+		stair_camera_position = stair_camera_position.lerp(desired, 1.0-exp(-16*delta))
+		var query := PhysicsRayQueryParameters3D.create(pivot, stair_camera_position, 2)
+		var hit := get_world_3d().direct_space_state.intersect_ray(query)
+		$Camera.position = stair_camera_position if hit.is_empty() else Vector3(hit.position).move_toward(pivot, 0.35)
+		$Camera.rotation = Vector3(-0.08, 0, 0)
+		return
 	var offset := Vector3(7,6,9)
 	$Camera.position = $Camera.position.lerp(focus + offset, 1.0-exp(-16*delta))
 	$Camera.look_at($Camera.position-offset)
@@ -206,13 +226,26 @@ func act(slot: int, link: bool) -> void:
 	elif walkers[slot].is_on_floor():
 		walkers[slot].velocity.y = 6.0
 
-func break_chain(origin: Vector3) -> void:
+func on_explosion(origin: Vector3) -> void:
+	if joined:
+		break_chain(origin, true)
+		return
+	for i in walkers.size():
+		var impulse: Vector3 = $SkyCourse.blast_velocity(walkers[i].position, origin)
+		walkers[i].velocity.y += impulse.y
+		recoil[i] += Vector3(impulse.x, 0, impulse.z)
+
+func break_chain(origin: Vector3, blasted := false) -> void:
 	if not joined:
 		return
 	for i in walkers.size():
 		var point: Vector3 = body.to_global(body.slots[i])
 		walkers[i].position = point
-		walkers[i].velocity = body.linear_velocity + (point - origin).normalized() * 4 + Vector3.UP * 2
+		var kick := (point - origin).normalized() * 4 + Vector3.UP * 2
+		if blasted:
+			kick = $SkyCourse.blast_velocity(point, origin)
+		walkers[i].velocity = body.linear_velocity + kick
+		recoil[i] = Vector3(walkers[i].velocity.x, 0, walkers[i].velocity.z)
 	votes.fill(false)
 	show_walkers()
 
