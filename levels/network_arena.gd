@@ -209,6 +209,10 @@ func remote_flash(target: int) -> void:
 	if joined:
 		body.flash_target(target)
 
+@rpc("authority","reliable")
+func remote_jump_flick(slot: int) -> void:
+	walkers[slot].get_node("Player").flick_arm()
+
 func group_is_close() -> bool:
 	for i in walkers.size():
 		for j in range(i + 1, walkers.size()):
@@ -234,6 +238,9 @@ func act(slot: int, link: bool) -> void:
 			set_joined()
 	elif walkers[slot].is_on_floor():
 		walkers[slot].velocity.y = 6.0
+		remote_jump_flick(slot)
+		if not multiplayer.get_peers().is_empty():
+			remote_jump_flick.rpc(slot)
 
 func on_explosion(origin: Vector3) -> void:
 	if joined:

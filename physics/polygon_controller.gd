@@ -29,8 +29,10 @@ var turn_votes := 0
 const CUES = preload("res://player/flight_cues.gd")
 var local_slot := 0
 var arrow: Node3D
+var avatars: Array[Node3D] = []
 
 func flash_target(target: int) -> void:
+	avatars[posmod(target - 1, avatars.size())].flick_arm()
 	var flash := CUES.ring(self, slots[target] + Vector3.DOWN * 0.42, Color.WHITE)
 	var tween := create_tween()
 	tween.tween_property(flash, "scale", Vector3.ONE * 1.65, 0.18)
@@ -62,6 +64,7 @@ func _ready() -> void:
 	for i in color_slots.size():
 		var avatar := PLAYER.instantiate() as Node3D
 		add_child(avatar)
+		avatars.append(avatar)
 		avatar.position = slots[i]
 		var material := StandardMaterial3D.new()
 		material.albedo_color = COLORS[color_slots[i]]
