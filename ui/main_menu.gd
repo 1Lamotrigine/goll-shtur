@@ -2,7 +2,7 @@ extends Control
 
 var peer: ENetMultiplayerPeer
 var members := {}
-const WIRE_VERSION := 11
+const WIRE_VERSION := 12
 var map_type := 0
 var status := ""
 var room_code := ""
@@ -18,6 +18,7 @@ const COLORS := ["Красный", "Синий", "Оранжевый", "Зелё
 func _ready() -> void:
 	$Center/Menu/Map.add_item("Карта · Луг")
 	$Center/Menu/Map.add_item("Карта · Big Stair")
+	$Center/Menu/Map.add_item("Карта · Янтарная шахта")
 	$Center/Menu/Map.item_selected.connect(func(index: int):
 		if peer and multiplayer.is_server():
 			map_type = index
@@ -230,12 +231,12 @@ func open_arena(selected_map: int, layout_seed: int) -> void:
 		return
 	arena = preload("res://levels/test_arena.tscn").instantiate()
 	arena.set_script(preload("res://levels/network_arena.gd"))
-	if selected_map == 1:
+	if selected_map in [1, 2]:
 		for child_name in ["Meadow", "OuterMeadow", "Floor"]:
 			arena.get_node(child_name).free()
-		var stairs := arena.get_node("SkyCourse")
-		stairs.set_script(preload("res://levels/big_stair.gd"))
-		stairs.set("layout_seed", layout_seed)
+		var course := arena.get_node("SkyCourse")
+		course.set_script(preload("res://levels/big_stair.gd") if selected_map == 1 else preload("res://levels/amber_mine.gd"))
+		course.set("layout_seed", layout_seed)
 	arena.name = "OnlineArena"
 	arena.members = members.duplicate(true)
 	var ids := members.keys()

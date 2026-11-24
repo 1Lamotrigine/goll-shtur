@@ -1,7 +1,7 @@
 extends Node3D
 
 const COUNT := 8
-const LENGTH := 1.45 * 0.54 * 2.1
+const LENGTH := 1.45 * 0.54 * 1.365
 var points := PackedVector3Array()
 var previous := PackedVector3Array()
 var pieces: Array[MeshInstance3D] = []

@@ -14,6 +14,8 @@ func run() -> void:
 		lobby.host_room()
 		if OS.get_cmdline_user_args().has("stairs"):
 			lobby.get_node("Center/Menu/Map").item_selected.emit(1)
+		if OS.get_cmdline_user_args().has("amber"):
+			lobby.get_node("Center/Menu/Map").item_selected.emit(2)
 		print("ROOM ", lobby.room_code)
 	else:
 		lobby.get_node("Center/Menu/Address").text = OS.get_cmdline_user_args()[0]
@@ -52,6 +54,10 @@ func run() -> void:
 				print("Layout ", course.layout_seed, " ", course.mines[-1].position)
 				var vent: Node3D = course.vents[0]
 				assert(course.wind_at(vent.position + vent.basis.y).dot(vent.basis.y) > 0)
+			if OS.get_cmdline_user_args().has("amber"):
+				var course = lobby.arena.get_node("SkyCourse")
+				assert(course.mines.size() == 15 and course.vents.size() == 5)
+				print("Amber layout ", course.layout_seed, " ", course.mines[-1].position)
 			voted = true
 			if host:
 				lobby.arena.act(0, true)
