@@ -17,6 +17,7 @@ func run() -> void:
 		lobby.get_node("Center/Menu/Address").text = OS.get_cmdline_user_args()[0]
 		lobby.join_room()
 	var deadline := Time.get_ticks_msec() + 9000
+	var walked := false
 	var sent := false
 	var voted := false
 	var saw_chain := false
@@ -30,7 +31,19 @@ func run() -> void:
 			sent = true
 		if host and not lobby.arena and lobby.members.values().all(func(member): return member.ready):
 			lobby.start_match()
-		if lobby.arena and not voted:
+		if lobby.arena and not host and not walked:
+			var a = lobby.arena
+			var slot: int = a.local_slot
+			var start: Vector3 = a.body.spawn.origin + a.body.slots[slot]
+			var key := InputEventKey.new()
+			key.physical_keycode = KEY_D
+			var delta_pos: Vector3 = a.walkers[slot].position - start
+			walked = Vector2(delta_pos.x, delta_pos.z).length() > 0.35
+			key.pressed = not walked
+			Input.parse_input_event(key)
+			if walked:
+				print("PASS guest displays horizontal movement")
+		if lobby.arena and not voted and (host or walked):
 			voted = true
 			if host:
 				lobby.arena.act(0, true)

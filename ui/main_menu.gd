@@ -2,6 +2,7 @@ extends Control
 
 var peer: ENetMultiplayerPeer
 var members := {}
+const WIRE_VERSION := 3
 var status := ""
 var room_code := ""
 var discovery := PacketPeerUDP.new()
@@ -20,7 +21,7 @@ func _ready() -> void:
 	$Center/Menu/Join.pressed.connect(join_room)
 	$Center/Menu/Leave.pressed.connect(close_room.bind("Вы вышли из комнаты"))
 	$Center/Menu/Ready.pressed.connect(toggle_ready)
-	multiplayer.connected_to_server.connect(func(): register_player.rpc_id(1, $Center/Menu/Nick.text))
+	multiplayer.connected_to_server.connect(func(): register_player.rpc_id(1, $Center/Menu/Nick.text, WIRE_VERSION))
 	multiplayer.connection_failed.connect(close_room.bind("Не удалось подключиться к хосту"))
 	multiplayer.server_disconnected.connect(close_room.bind("Хост закрыл комнату"))
 	multiplayer.peer_disconnected.connect(remove_player)
@@ -98,9 +99,15 @@ func close_room(message: String) -> void:
 	refresh()
 
 @rpc("any_peer", "reliable")
-func register_player(nickname: String) -> void:
+func register_player(nickname: String, version := 0) -> void:
 	if multiplayer.is_server():
-		add_player(multiplayer.get_remote_sender_id(), nickname)
+		var id := multiplayer.get_remote_sender_id()
+		if version != WIRE_VERSION:
+			peer.disconnect_peer(id)
+			status = "Версии сети различаются. Обновите игру у обоих игроков."
+			refresh()
+			return
+		add_player(id, nickname)
 
 func add_player(id: int, nickname: String) -> void:
 	if members.has(id) or members.size() >= COLORS.size() or arena:

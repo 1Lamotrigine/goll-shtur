@@ -12,6 +12,8 @@ var warn_until := PackedInt64Array()
 var target_positions := PackedVector3Array()
 var target_pose := Transform3D.IDENTITY
 var received := false
+var last_snapshot_tick := -1
+var last_sync_ms := 0
 var local_slot: int
 var tick := 0
 @onready var body := $Polygon
@@ -97,16 +99,13 @@ func _physics_process(delta: float) -> void:
 			body.linear_velocity = Vector3.ZERO
 			body.angular_velocity = Vector3.ZERO
 		if tick % 3 == 0:
-			var positions := PackedVector3Array()
-			var velocities := PackedVector3Array()
-			var grounded := PackedByteArray()
-			for walker in walkers:
-				velocities.append(walker.get_real_velocity())
-				grounded.append(int(walker.is_on_floor()))
-				positions.append(walker.position)
-			snapshot.rpc(positions, velocities, grounded, body.transform, votes, joined, directions, warn_until, tick)
+			send_state()
 	elif tick % 2 == 0:
 		movement.rpc_id(1, direction)
+		var now := Time.get_ticks_msec()
+		if now - last_sync_ms >= 1000:
+			last_sync_ms = now
+			request_state.rpc_id(1)
 	var left := false
 	var right := false
 	for d: Vector2 in directions:
@@ -234,8 +233,39 @@ func set_joined() -> void:
 		body.control_yaw = true
 		body.freeze = false
 
-@rpc("authority","unreliable_ordered")
-func snapshot(positions: PackedVector3Array, velocities: PackedVector3Array, grounded: PackedByteArray, pose: Transform3D, ready_votes: Array, linked: bool, inputs: Array, warnings: PackedInt64Array, host_tick: int) -> void:
+func send_state(recipient := 0) -> void:
+	var positions := PackedVector3Array()
+	var velocities := PackedVector3Array()
+	var grounded := PackedByteArray()
+	for walker in walkers:
+		velocities.append(walker.get_real_velocity())
+		grounded.append(int(walker.is_on_floor()))
+		positions.append(walker.position)
+	var state := [positions, velocities, grounded, body.transform, votes, joined, directions, warn_until, tick]
+	if recipient:
+		recover_state.rpc_id(recipient, state)
+	else:
+		snapshot.rpc(state)
+
+@rpc("any_peer","reliable")
+func request_state() -> void:
+	var id := multiplayer.get_remote_sender_id()
+	if multiplayer.is_server() and members.has(id):
+		send_state(id)
+
+@rpc("authority","reliable")
+func recover_state(state: Array) -> void:
+	apply_snapshot.callv(state)
+
+@rpc("authority","call_remote","unreliable_ordered", 1)
+func snapshot(state: Array) -> void:
+	apply_snapshot.callv(state)
+
+func apply_snapshot(positions: PackedVector3Array, velocities: PackedVector3Array, grounded: PackedByteArray, pose: Transform3D, ready_votes: Array, linked: bool, inputs: Array, warnings: PackedInt64Array, host_tick: int) -> void:
+	if host_tick <= last_snapshot_tick:
+		return
+	last_snapshot_tick = host_tick
+	last_sync_ms = Time.get_ticks_msec()
 	directions = inputs
 	for i in walkers.size():
 		warn_until[i] = tick + maxi(0, warnings[i] - host_tick)
