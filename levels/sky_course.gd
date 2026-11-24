@@ -13,9 +13,9 @@ func _ready() -> void:
 			var copy := meadow.get_node(template).duplicate() as Node3D
 			add_child(copy)
 			copy.position += landing
-	var instruction := "Подойдите ближе\nКаждый нажимает J"
+	var instruction := "Подойдите ближе\nE — взяться за руки\nSpace — рывок · X — разрыв"
 	if multiplayer.multiplayer_peer is OfflineMultiplayerPeer or multiplayer.multiplayer_peer == null:
-		instruction = "Цепочка собрана\nQ W O P — рывки"
+		instruction = "Цепочка собрана\nQ W O P — рывки\nA/D — поворот · X — разрыв"
 	signboard(Vector3(-3, 0, 2), instruction)
 	signboard(Vector3(1, 0, -4), "↑\nЛетите к платформам")
 	var rng := RandomNumberGenerator.new()
@@ -50,7 +50,7 @@ func signboard(at: Vector3, caption: String) -> void:
 	post.material = material(Color("#915d36"))
 	visual(board, post, Vector3.UP * 0.85)
 	var panel := BoxMesh.new()
-	panel.size = Vector3(2.9, 1.1, 0.14)
+	panel.size = Vector3(3.7, 1.3, 0.14)
 	panel.material = material(Color("#22534a"))
 	visual(board, panel, Vector3.UP * 1.7)
 	var label := Label3D.new()

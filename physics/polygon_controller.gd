@@ -22,10 +22,34 @@ var counts := PackedInt32Array([0, 0, 0, 0])
 @export_range(5.0, 55.0, 1.0) var turn_degrees_per_vote := 35.0
 var control_yaw := false
 var turn_votes := 0
+const CUES = preload("res://player/flight_cues.gd")
+var local_slot := 0
+var arrow: Node3D
+
+func flash_target(target: int) -> void:
+	var flash := CUES.ring(self, slots[target] + Vector3.DOWN * 0.42, Color.WHITE)
+	var tween := create_tween()
+	tween.tween_property(flash, "scale", Vector3.ONE * 1.65, 0.18)
+	tween.tween_callback(flash.queue_free)
+
+func _process(_delta: float) -> void:
+	var tilt := global_basis.y.slide(Vector3.UP)
+	arrow.hide()
+	if not is_visible_in_tree() or tilt.length_squared() < 0.0004:
+		return
+	var query := PhysicsRayQueryParameters3D.create(global_position, global_position + Vector3.DOWN * 500, 1, [get_rid()])
+	var hit := get_world_3d().direct_space_state.intersect_ray(query)
+	if not hit.is_empty():
+		arrow.global_position = hit.position + Vector3.UP * 0.08
+		arrow.look_at(arrow.global_position + tilt, Vector3.UP)
+		arrow.show()
+
 var spawn: Transform3D
 
 func _ready() -> void:
 	spawn = global_transform
+	arrow = CUES.arrow(self)
+	pull_accepted.connect(func(_source, target): flash_target(target))
 	cooldown.resize(color_slots.size())
 	counts.resize(color_slots.size())
 	for i in color_slots.size():
@@ -38,6 +62,9 @@ func _ready() -> void:
 		var material := StandardMaterial3D.new()
 		material.albedo_color = COLORS[color_slots[i]]
 		avatar.paint(material)
+		CUES.lifter(avatar, COLORS[color_slots[(i-1+color_slots.size()) % color_slots.size()]])
+		if i == local_slot:
+			CUES.ring(avatar, Vector3.DOWN * 0.46, material.albedo_color)
 		avatar.get_node("Number").text = str(i + 1)
 		var shape := CapsuleShape3D.new()
 		shape.radius = 0.36
@@ -86,5 +113,5 @@ func _integrate_forces(state: PhysicsDirectBodyState3D) -> void:
 	state.linear_velocity = (vertical + horizontal.limit_length(max_horizontal_speed)).limit_length(max_linear_speed)
 	var spin := state.angular_velocity.limit_length(max_angular_speed)
 	if control_yaw:
-		spin.y = deg_to_rad(turn_degrees_per_vote) * turn_votes
+		spin.y = deg_to_rad(clampf(turn_degrees_per_vote * turn_votes, -70, 70))
 	state.angular_velocity = spin

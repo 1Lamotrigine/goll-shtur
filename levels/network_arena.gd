@@ -6,6 +6,12 @@ var directions := []
 @export_range(1.0, 10.0, 0.1) var link_distance := 4.5
 var votes := []
 var joined := false
+var prompts: Array[Label3D] = []
+var conflicts: Array[Label3D] = []
+var warn_until := PackedInt64Array()
+var target_positions := PackedVector3Array()
+var target_pose := Transform3D.IDENTITY
+var received := false
 var local_slot: int
 var tick := 0
 @onready var body := $Polygon
@@ -36,6 +42,21 @@ func _ready() -> void:
 		mat.albedo_color = body.COLORS[body.color_slots[i]]
 		avatar.paint(mat)
 		avatar.get_node("Number").text = str(i + 1)
+		body.CUES.lifter(avatar, body.COLORS[body.color_slots[posmod(i-1,members.size())]])
+		if i == local_slot:
+			body.CUES.ring(avatar, Vector3.DOWN * 0.46, mat.albedo_color)
+		var prompt := Label3D.new()
+		prompt.billboard = BaseMaterial3D.BILLBOARD_ENABLED
+		walker.add_child(prompt)
+		prompt.position.y = 1.65
+		prompts.append(prompt)
+		warn_until.append(0)
+		var indicator := Label3D.new()
+		indicator.billboard = BaseMaterial3D.BILLBOARD_ENABLED
+		indicator.modulate = mat.albedo_color
+		body.add_child(indicator)
+		indicator.position = body.slots[i] + Vector3.UP * 2
+		conflicts.append(indicator)
 		walkers.append(walker)
 
 func _physics_process(delta: float) -> void:
@@ -50,7 +71,7 @@ func _physics_process(delta: float) -> void:
 				var move: Vector2 = directions[i].rotated(-atan2(7,9)) * 5
 				walker.velocity.x = move.x
 				walker.velocity.z = move.y
-				walker.velocity.y -= 9.8 * delta
+				walker.velocity.y -= walker.get_gravity().length() * delta
 				walker.move_and_slide()
 				walker.get_node("Player").speed = walker.get_real_velocity()
 				walker.get_node("Player").grounded = walker.is_on_floor()
@@ -65,6 +86,11 @@ func _physics_process(delta: float) -> void:
 			if turn_balance != 0:
 				body.sleeping = false
 		if not joined and votes.has(true) and not group_is_close():
+			for a in walkers.size():
+				for b in range(a+1, walkers.size()):
+					if walkers[a].position.distance_to(walkers[b].position) > link_distance:
+						warn_until[a] = tick + 60
+						warn_until[b] = tick + 60
 			votes.fill(false)
 		if joined and body.position.y < -10:
 			body.global_transform = body.spawn
@@ -78,28 +104,50 @@ func _physics_process(delta: float) -> void:
 				velocities.append(walker.get_real_velocity())
 				grounded.append(int(walker.is_on_floor()))
 				positions.append(walker.position)
-			snapshot.rpc(positions, velocities, grounded, body.transform, votes, joined)
+			snapshot.rpc(positions, velocities, grounded, body.transform, votes, joined, directions, warn_until, tick)
 	elif tick % 2 == 0:
 		movement.rpc_id(1, direction)
-	var focus: Vector3 = body.position if joined else walkers[local_slot].position
-	$Camera.position = focus + Vector3(7,6,9)
-	$Camera.look_at(focus)
+	var left := false
+	var right := false
+	for d: Vector2 in directions:
+		left = left or d.x < 0
+		right = right or d.x > 0
+	for i in walkers.size():
+		conflicts[i].text = ("←" if directions[i].x < 0 else "→") if joined and left and right and directions[i].x != 0 else ""
+		prompts[i].modulate = Color.ORANGE_RED if tick < warn_until[i] else Color.WHITE
+		prompts[i].text = "Слишком далеко" if tick < warn_until[i] else ("✓" if votes[i] else ("E — взяться за руки" if i == local_slot and group_is_close() else ""))
 	$Overlay/Hud.text = "Игрок %d   •   Esc — выйти\n" % (local_slot+1)
-	$Overlay/Hud.text += "A/D — поворот   Space — поднять соседа" if joined else "WASD — ходьба   Space — прыжок   J — соединиться (%d/%d)" % [votes.count(true), members.size()]
+	$Overlay/Hud.text += "A/D — поворот   Space — поднять соседа   X — разорвать" if joined else "WASD — ходьба   Space — прыжок   E — соединиться (%d/%d)" % [votes.count(true), members.size()]
 
 	if not joined and not group_is_close():
 		$Overlay/Hud.text += "\nСоберитесь ближе: между любыми двумя игроками — до %.1f м" % link_distance
+
+func _process(delta: float) -> void:
+	if not multiplayer.is_server() and received:
+		var weight := 1.0 - exp(-30 * delta)
+		body.transform = body.transform.interpolate_with(target_pose, weight)
+		for i in walkers.size():
+			walkers[i].position = walkers[i].position.lerp(target_positions[i], weight)
+	var focus: Vector3 = body.position if joined else walkers[local_slot].position
+	var offset := Vector3(7,6,9)
+	$Camera.position = $Camera.position.lerp(focus + offset, 1.0-exp(-16*delta))
+	$Camera.look_at($Camera.position-offset)
 
 func _unhandled_key_input(event: InputEvent) -> void:
 	if not event is InputEventKey or not event.pressed or event.echo:
 		return
 	if event.physical_keycode == KEY_ESCAPE:
 		get_parent().close_room("Вы вышли из комнаты")
-	elif event.physical_keycode in [KEY_SPACE, KEY_J]:
+	elif event.physical_keycode == KEY_X and joined:
 		if multiplayer.is_server():
-			act(local_slot, event.physical_keycode == KEY_J)
+			break_chain(body.position)
 		else:
-			action.rpc_id(1, event.physical_keycode == KEY_J)
+			request_break.rpc_id(1)
+	elif event.physical_keycode in [KEY_SPACE, KEY_E]:
+		if multiplayer.is_server():
+			act(local_slot, event.physical_keycode == KEY_E)
+		else:
+			action.rpc_id(1, event.physical_keycode == KEY_E)
 
 @rpc("any_peer","unreliable_ordered")
 func movement(direction: Vector2) -> void:
@@ -113,6 +161,16 @@ func action(link: bool) -> void:
 	if multiplayer.is_server() and members.has(id):
 		act(members[id].slot, link)
 
+@rpc("any_peer","reliable")
+func request_break() -> void:
+	if multiplayer.is_server() and members.has(multiplayer.get_remote_sender_id()):
+		break_chain(body.position)
+
+@rpc("authority","reliable")
+func remote_flash(target: int) -> void:
+	if joined:
+		body.flash_target(target)
+
 func group_is_close() -> bool:
 	for i in walkers.size():
 		for j in range(i + 1, walkers.size()):
@@ -123,7 +181,8 @@ func group_is_close() -> bool:
 func act(slot: int, link: bool) -> void:
 	if joined:
 		if not link:
-			body.request_pull(slot)
+			if body.request_pull(slot) and not multiplayer.get_peers().is_empty():
+				remote_flash.rpc((slot + 1) % walkers.size())
 	elif link:
 		if not group_is_close():
 			votes.fill(false)
@@ -176,13 +235,22 @@ func set_joined() -> void:
 		body.freeze = false
 
 @rpc("authority","unreliable_ordered")
-func snapshot(positions: PackedVector3Array, velocities: PackedVector3Array, grounded: PackedByteArray, pose: Transform3D, ready_votes: Array, linked: bool) -> void:
+func snapshot(positions: PackedVector3Array, velocities: PackedVector3Array, grounded: PackedByteArray, pose: Transform3D, ready_votes: Array, linked: bool, inputs: Array, warnings: PackedInt64Array, host_tick: int) -> void:
+	directions = inputs
+	for i in walkers.size():
+		warn_until[i] = tick + maxi(0, warnings[i] - host_tick)
+	target_positions = positions
+	target_pose = pose
+	var snap: bool = not received or joined != linked or body.position.distance_to(pose.origin) > 8
+	received = true
 	votes = ready_votes
 	for i in members.size():
-		walkers[i].position = positions[i]
+		if snap or walkers[i].position.distance_to(positions[i]) > 8:
+			walkers[i].position = positions[i]
 		walkers[i].get_node("Player").speed = velocities[i]
 		walkers[i].get_node("Player").grounded = bool(grounded[i])
-	body.transform = pose
+	if snap:
+		body.transform = pose
 	if linked and not joined:
 		set_joined()
 	elif not linked and joined:

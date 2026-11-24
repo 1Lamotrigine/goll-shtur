@@ -29,12 +29,14 @@ func _process(delta: float) -> void:
 		hud.text = "Цепочка разорвана   •   R — начать заново"
 		return
 	var tilt := rad_to_deg(Vector3.UP.angle_to(body.global_basis.y))
-	hud.text = "A/D — поворот 1×    •    R — сброс    •    Esc — меню\n1  Space/Q → 2      2  W → 3      3  O → 4      4  P → 1\nРывки %s    Высота %.1f м    Скорость %.1f м/с    Крен %.0f°" % [
+	hud.text = "A/D — поворот 1×    •    X — разорвать    •    R — сброс    •    Esc — меню\n1  Space/Q → 2      2  W → 3      3  O → 4      4  P → 1\nРывки %s    Высота %.1f м    Скорость %.1f м/с    Крен %.0f°" % [
 		str(body.counts), body.position.y, body.linear_velocity.length(), tilt]
 
 
 func _unhandled_input(event: InputEvent) -> void:
-	if event.is_action_pressed("ui_cancel", false):
+	if event is InputEventKey and event.pressed and not event.echo and event.physical_keycode == KEY_X:
+		break_chain(body.position)
+	elif event.is_action_pressed("ui_cancel", false):
 		get_tree().change_scene_to_file("res://ui/main_menu.tscn")
 
 func break_chain(origin: Vector3) -> void:

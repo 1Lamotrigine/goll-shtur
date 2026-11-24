@@ -19,6 +19,8 @@ func run() -> void:
 	var deadline := Time.get_ticks_msec() + 9000
 	var sent := false
 	var voted := false
+	var saw_chain := false
+	var release_at := 0
 	while Time.get_ticks_msec() < deadline:
 		await process_frame
 		if lobby.members.size() != expected:
@@ -34,8 +36,17 @@ func run() -> void:
 				lobby.arena.act(0, true)
 			else:
 				lobby.arena.action.rpc_id(1, true)
-		if lobby.arena and lobby.arena.joined:
-			print("PASS room discovered, arena started, chain joined ", lobby.multiplayer.get_unique_id())
+		if lobby.arena and lobby.arena.joined and not saw_chain:
+			saw_chain = true
+			release_at = Time.get_ticks_msec() + 200
+		if saw_chain and not host and lobby.arena.local_slot == 1 and release_at > 0 and Time.get_ticks_msec() >= release_at:
+			release_at = 0
+			var key := InputEventKey.new()
+			key.physical_keycode = KEY_X
+			key.pressed = true
+			Input.parse_input_event(key)
+		if saw_chain and lobby.arena and not lobby.arena.joined:
+			print("PASS room discovered, arena started, chain joined and released by guest ", lobby.multiplayer.get_unique_id())
 			await create_timer(0.7 if host else 0.5).timeout
 			quit(0)
 			return

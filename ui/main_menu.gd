@@ -219,6 +219,7 @@ func open_arena() -> void:
 		colors.append(members[ids[i]].slot)
 		arena.members[ids[i]].slot = i
 	arena.get_node("Polygon").color_slots = colors
+	arena.get_node("Polygon").local_slot = arena.members[multiplayer.get_unique_id()].slot
 	add_child(arena)
 	$Background.hide()
 	$Center.hide()
