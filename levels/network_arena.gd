@@ -12,8 +12,12 @@ var joined := false
 var prompts: Array[Label3D] = []
 var conflicts: Array[Label3D] = []
 var warn_until := PackedInt64Array()
-var target_positions := PackedVector3Array()
-var target_pose := Transform3D.IDENTITY
+# Two snapshot intervals absorb irregular arrivals on Wi-Fi.
+const PLAYBACK_DELAY := 6.0
+var frames: Array[Dictionary] = []
+var playback_tick := 0.0
+var sent_direction := Vector2.ZERO
+var sent_sprint := false
 var received := false
 var last_snapshot_tick := -1
 var last_sync_ms := 0
@@ -140,8 +144,12 @@ func _physics_process(delta: float) -> void:
 			body.angular_velocity = Vector3.ZERO
 		if tick % 3 == 0:
 			send_state()
-	elif tick % 2 == 0:
-		movement.rpc_id(1, direction, Input.is_physical_key_pressed(KEY_SHIFT))
+	else:
+		var sprint := Input.is_physical_key_pressed(KEY_SHIFT)
+		if direction != sent_direction or sprint != sent_sprint or tick % 6 == 0:
+			movement.rpc_id(1, direction, sprint)
+			sent_direction = direction
+			sent_sprint = sprint
 		var now := Time.get_ticks_msec()
 		if now - last_sync_ms >= 1000:
 			last_sync_ms = now
@@ -166,10 +174,20 @@ func _physics_process(delta: float) -> void:
 
 func _process(delta: float) -> void:
 	if not multiplayer.is_server() and received:
-		var weight := 1.0 - exp(-30 * delta)
-		body.transform = body.transform.interpolate_with(target_pose, weight)
+		var lead := last_snapshot_tick - playback_tick
+		var pace := clampf(1.0 + (lead - PLAYBACK_DELAY) * 0.025, 0.90, 1.10)
+		playback_tick = minf(last_snapshot_tick, playback_tick + delta * Engine.physics_ticks_per_second * pace)
+		while frames.size() > 1 and frames[1].tick <= playback_tick:
+			frames.pop_front()
+		var first := frames[0]
+		var next := frames[mini(1, frames.size() - 1)]
+		var weight := clampf((playback_tick - first.tick) / maxf(1, next.tick - first.tick), 0, 1)
+		body.transform = first.pose.interpolate_with(next.pose, weight)
 		for i in walkers.size():
-			walkers[i].position = walkers[i].position.lerp(target_positions[i], weight)
+			walkers[i].position = first.positions[i].lerp(next.positions[i], weight)
+			var avatar := walkers[i].get_node("Player")
+			avatar.speed = first.velocities[i].lerp(next.velocities[i], weight)
+			avatar.grounded = first.grounded[i] if weight < 0.5 else next.grounded[i]
 	var focus: Vector3 = body.position if joined else walkers[local_slot].position
 	if stair_arm:
 		return
@@ -337,18 +355,24 @@ func apply_snapshot(positions: PackedVector3Array, velocities: PackedVector3Arra
 	directions = inputs
 	for i in walkers.size():
 		warn_until[i] = tick + maxi(0, warnings[i] - host_tick)
-	target_positions = positions
-	target_pose = pose
-	var snap: bool = not received or joined != linked or body.position.distance_to(pose.origin) > 8
+	var snap := frames.is_empty() or joined != linked or host_tick - playback_tick > 30
+	if not snap:
+		var prior := frames.back() as Dictionary
+		snap = prior.pose.origin.distance_to(pose.origin) > 8
+		for i in walkers.size():
+			if prior.positions[i].distance_to(positions[i]) > 8:
+				snap = true
+				break
+	if snap:
+		frames.clear()
+		playback_tick = host_tick - PLAYBACK_DELAY
+		body.transform = pose
+		for i in walkers.size():
+			walkers[i].position = positions[i]
+	frames.append({"tick": host_tick, "positions": positions, "pose": pose,
+		"velocities": velocities, "grounded": grounded})
 	received = true
 	votes = ready_votes
-	for i in members.size():
-		if snap or walkers[i].position.distance_to(positions[i]) > 8:
-			walkers[i].position = positions[i]
-		walkers[i].get_node("Player").speed = velocities[i]
-		walkers[i].get_node("Player").grounded = bool(grounded[i])
-	if snap:
-		body.transform = pose
 	if linked and not joined:
 		set_joined()
 	elif not linked and joined:
