@@ -1,5 +1,7 @@
 extends "res://levels/sky_course.gd"
 
+enum Section { TERRACE, FORK, UPDRAFT }
+
 const WIDTH := 34.0
 const REACH := 12.0
 var passages: Array[AABB] = []
@@ -13,6 +15,7 @@ func _ready() -> void:
 	var heights := PackedFloat32Array([0.0])
 	for i in 14:
 		heights.append(heights[-1] + rng.randf_range(4.5, 7.5))
+	var section_order: Array[int] = [Section.TERRACE, Section.FORK, Section.UPDRAFT]
 	var previous_ceiling := heights[2] + 3.0
 	for i in 13:
 		var depth := rng.randf_range(12, 18)
@@ -36,15 +39,42 @@ func _ready() -> void:
 			block(Vector3(0, ceiling/2, edge + 0.25), Vector3(WIDTH + 1.6, ceiling, 0.5), wall_color)
 		previous_ceiling = ceiling
 		if i > 0:
-			for lane in 4:
-				var x := -WIDTH/2 + (lane + rng.randf_range(0.22, 0.78)) * WIDTH/4
-				create_mine(Vector3(x, top + rng.randf_range(1.4, 5.5), edge - rng.randf_range(1.3, depth - 1.3)))
-			if rng.randf() < 0.5:
-				add_vent(Vector3(-WIDTH/2 + 0.12, top + rng.randf_range(1.8, 4.2), middle), Vector3(1, rng.randf_range(0.1, 0.55), rng.randf_range(-0.6, 0.6)).normalized())
-			else:
-				add_vent(Vector3(rng.randf_range(-8, 8), top - 2.1, edge + 0.12), Vector3(0, rng.randf_range(0.1, 0.65), 1).normalized())
+			# Draw each section once per group of three using the shared layout seed.
+			var slot := (i - 1) % section_order.size()
+			var pick := rng.randi_range(slot, section_order.size() - 1)
+			var chosen := section_order[pick]
+			section_order[pick] = section_order[slot]
+			section_order[slot] = chosen
+			var side := 1 if rng.randf() < 0.5 else -1
+			add_section(chosen, side, top, heights[i + 1] - top, edge, depth, rng)
 		edge -= depth
 	signboard(Vector3(-3, 0, 2), "Big Stair\nE — взяться за руки\nПоднимайтесь по ступеням")
+
+# One side holds the traversal feature. The opposite side stays open,
+# with two staggered pairs of mines that can be threaded or flown over.
+func add_section(kind: int, side: int, top: float, rise: float, edge: float, depth: float, rng: RandomNumberGenerator) -> void:
+	var middle := edge - depth * 0.5
+	var lane := side * 9.0
+	match kind:
+		Section.TERRACE:
+			var height := rise * 0.5
+			block(Vector3(lane, top + height / 2, edge - depth * 0.77),
+				Vector3(11, height, depth * 0.46), Color("#468d85"))
+			add_vent(Vector3(lane, top + 0.12, edge - depth * 0.3), Vector3(0, 1, -0.4).normalized())
+		Section.FORK:
+			# Split around the pillar, then emerge into a crosswind on one branch.
+			block(Vector3(0, top + 3.5, middle), Vector3(3.2, 7, 3.2), Color("#b87a49"))
+			add_vent(Vector3(side * (WIDTH/2 - 0.12), top + 3, middle),
+				Vector3(-side, 0.3, -0.25).normalized())
+		Section.UPDRAFT:
+			# A raised launch pad aims the air stream at the next step.
+			block(Vector3(lane, top + 0.45, middle), Vector3(8, 0.9, 7), Color("#5079aa"))
+			add_vent(Vector3(lane, top + 1.04, middle), Vector3(0, 1, -0.75).normalized())
+	for row in 2:
+		for column in 2:
+			var x := -side * (4.0 + column * 7.0 + row * 1.6 + rng.randf_range(-0.6, 0.6))
+			var z := edge - depth * (0.26 + row * 0.48)
+			create_mine(Vector3(x, top + rng.randf_range(1.6, 4.8), z))
 
 # Keep the sweep origin inside the passage, including both sides of a step seam.
 func camera_pivot(focus: Vector3, clearance: float) -> Vector3:
