@@ -9,6 +9,7 @@ var searching := ""
 var search_until := 0
 var next_query := 0
 var arena: Node3D
+const DISCOVERY_GROUP := "239.255.42.68"
 const DISCOVERY_PORT := 24568
 const COLORS := ["Красный", "Синий", "Оранжевый", "Зелёный", "Фиолетовый", "Жёлтый"]
 
@@ -25,7 +26,7 @@ func _ready() -> void:
 	multiplayer.peer_disconnected.connect(remove_player)
 	$Center/Menu/Start.pressed.connect(start_match)
 	$Center/Menu/Copy.pressed.connect(func(): DisplayServer.clipboard_set(room_code))
-	$Center/Menu/Address.placeholder_text = "6 цифр комнаты или IP хоста"
+	$Center/Menu/Address.placeholder_text = "Код комнаты или IP:порт"
 	$Center/Menu/Port.prefix = "UDP "
 	$Center/Menu.custom_minimum_size.x = 340
 	refresh()
@@ -36,15 +37,20 @@ func host_room() -> void:
 		status = "Не удалось открыть UDP-порт"
 		refresh()
 		return
-	if discovery.bind(DISCOVERY_PORT, "0.0.0.0") != OK:
-		candidate.close()
-		status = "Порт поиска комнат 24568 занят"
-		refresh()
-		return
-	room_code = "%06d" % randi_range(0, 999999)
+	var discovery_available := discovery.bind(DISCOVERY_PORT, "0.0.0.0") == OK
+	if discovery_available:
+		for interface in IP.get_local_interfaces():
+			for address: String in interface.addresses:
+				if "." in address and not address.begins_with("127."):
+					discovery.join_multicast_group(DISCOVERY_GROUP, interface.name)
+					break
+	room_code = "%06d" % randi_range(0, 999999) if discovery_available else ""
 	peer = candidate
 	multiplayer.multiplayer_peer = peer
-	status = "Код %s · UDP %d" % [room_code, int($Center/Menu/Port.value)]
+	status = "Код комнаты " + room_code if discovery_available else "Поиск по коду недоступен"
+	for address in IP.get_local_addresses():
+		if "." in address and not address.begins_with("127.") and not ":" in address:
+			status += "\nАдрес для входа: %s:%d" % [address, int($Center/Menu/Port.value)]
 	add_player(1, $Center/Menu/Nick.text)
 
 func join_room() -> void:
@@ -60,11 +66,16 @@ func join_room() -> void:
 			status = "Поиск комнаты в локальной сети…"
 		refresh()
 		return
-	connect_address(address, int($Center/Menu/Port.value))
+	var port := int($Center/Menu/Port.value)
+	if address.count(":") == 1:
+		var port_text := address.get_slice(":", 1)
+		port = port_text.to_int() if port_text.is_valid_int() else 0
+		address = address.get_slice(":", 0)
+	connect_address(address, port)
 
 func connect_address(address: String, port: int) -> void:
 	var candidate := ENetMultiplayerPeer.new()
-	if not address.is_valid_ip_address() or candidate.create_client(address, port) != OK:
+	if port < 1 or port > 65535 or not address.is_valid_ip_address() or candidate.create_client(address, port) != OK:
 		status = "Проверьте IP и порт хоста"
 		refresh()
 		return
@@ -167,12 +178,13 @@ func _process(_delta: float) -> void:
 		return
 	var now := Time.get_ticks_msec()
 	if not searching.is_empty() and now >= search_until:
-		close_room("Комната не найдена. Проверьте код и подключение к одной сети.")
+		close_room("Комната не найдена. Введите адрес IP:порт с экрана хоста.")
 		return
 	if not searching.is_empty() and now >= next_query:
 		next_query = now + 500
-		discovery.set_dest_address("255.255.255.255", DISCOVERY_PORT)
-		discovery.put_packet(("GP1?"+searching).to_ascii_buffer())
+		for destination in [DISCOVERY_GROUP, "255.255.255.255", "127.0.0.1"]:
+			if discovery.set_dest_address(destination, DISCOVERY_PORT) == OK:
+				discovery.put_packet(("GP1?" + searching).to_ascii_buffer())
 	for i in mini(32, discovery.get_available_packet_count()):
 		var msg := discovery.get_packet().get_string_from_ascii()
 		var ip := discovery.get_packet_ip()
