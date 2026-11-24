@@ -2,6 +2,7 @@ extends "res://levels/sky_course.gd"
 
 const WIDTH := 34.0
 const REACH := 12.0
+var passages: Array[AABB] = []
 var layout_seed: int
 var vents: Array[Node3D] = []
 
@@ -19,6 +20,7 @@ func _ready() -> void:
 			depth += 4.0
 		var top := heights[i]
 		var ceiling := heights[i + 2] + 3.0
+		passages.append(AABB(Vector3(-WIDTH/2, top, edge - depth), Vector3(WIDTH, ceiling - top, depth)))
 		var middle := edge - depth * 0.5
 		var tint := Color.from_hsv(rng.randf_range(0.725, 0.78), 0.52, 0.69)
 		block(Vector3(0, (top - 4) * 0.5, middle), Vector3(WIDTH, top + 4, depth), tint)
@@ -43,6 +45,16 @@ func _ready() -> void:
 				add_vent(Vector3(rng.randf_range(-8, 8), top - 2.1, edge + 0.12), Vector3(0, rng.randf_range(0.1, 0.65), 1).normalized())
 		edge -= depth
 	signboard(Vector3(-3, 0, 2), "Big Stair\nE — взяться за руки\nПоднимайтесь по ступеням")
+
+# Keep the sweep origin inside the passage, including both sides of a step seam.
+func camera_pivot(focus: Vector3, clearance: float) -> Vector3:
+	var pivot := focus
+	pivot.x = clampf(pivot.x, -WIDTH/2 + clearance, WIDTH/2 - clearance)
+	pivot.z = clampf(pivot.z, passages[-1].position.z + clearance, passages[0].end.z - clearance)
+	for passage in passages:
+		if pivot.z >= passage.position.z - clearance and pivot.z <= passage.end.z + clearance:
+			pivot.y = clampf(pivot.y, passage.position.y + clearance, passage.end.y - clearance)
+	return pivot
 
 func block(at: Vector3, size: Vector3, tint: Color) -> void:
 	var solid := StaticBody3D.new()
