@@ -1,0 +1,67 @@
+[gd_scene format=3]
+
+[ext_resource type="Script" path="res://ui/main_menu.gd" id="Menu"]
+
+[node name="MainMenu" type="Control"]
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+script = ExtResource("Menu")
+
+[node name="Background" type="ColorRect" parent="."]
+anchor_right = 1.0
+anchor_bottom = 1.0
+color = Color(0.045, 0.084, 0.12, 1)
+mouse_filter = 2
+
+[node name="Center" type="CenterContainer" parent="."]
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+
+[node name="Menu" type="VBoxContainer" parent="Center"]
+theme_override_constants/separation = 8
+
+[node name="Title" type="Label" parent="Center/Menu"]
+theme_override_font_sizes/font_size = 34
+theme_override_colors/font_color = Color(0.43, 0.91, 0.81, 1)
+text = "Gooner's Polygon Alpha"
+horizontal_alignment = 1
+
+[node name="Training" type="Button" parent="Center/Menu"]
+text = "Тренировка"
+
+[node name="Quit" type="Button" parent="Center/Menu"]
+text = "Выход"
+
+[node name="Nick" type="LineEdit" parent="Center/Menu"]
+placeholder_text = "Имя игрока"
+max_length = 24
+
+[node name="Address" type="LineEdit" parent="Center/Menu"]
+placeholder_text = "IP хоста"
+
+[node name="Port" type="SpinBox" parent="Center/Menu"]
+min_value = 1
+max_value = 65535
+value = 24567
+
+[node name="Host" type="Button" parent="Center/Menu"]
+text = "Создать комнату"
+
+[node name="Join" type="Button" parent="Center/Menu"]
+text = "Присоединиться"
+
+[node name="Roster" type="Label" parent="Center/Menu"]
+
+[node name="Ready" type="Button" parent="Center/Menu"]
+text = "Готов / отменить готовность"
+
+[node name="Leave" type="Button" parent="Center/Menu"]
+text = "Покинуть комнату"
+
+[node name="Start" type="Button" parent="Center/Menu"]
+text = "Войти на арену"
+
+[node name="Copy" type="Button" parent="Center/Menu"]
+text = "Скопировать код комнаты"

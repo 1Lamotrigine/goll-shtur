@@ -1,0 +1,73 @@
+[gd_scene format=3 uid="uid://q53638jvxyjj"]
+
+[ext_resource type="Script" uid="uid://dvukpm5i4l61s" path="res://levels/test_arena.gd" id="Arena"]
+[ext_resource type="Script" uid="uid://bjc37as2n7wfr" path="res://physics/polygon_controller.gd" id="Controller"]
+
+[ext_resource type="PackedScene" path="res://levels/meadow.tscn" id="Meadow"]
+[ext_resource type="Script" path="res://levels/sky_course.gd" id="Course"]
+[ext_resource type="Script" path="res://levels/outer_meadow.gd" id="Outer"]
+[sub_resource type="StandardMaterial3D" id="FloorMat"]
+albedo_color = Color(0.26, 0.64, 0.105, 1)
+
+[sub_resource type="BoxMesh" id="FloorMesh"]
+material = SubResource("FloorMat")
+size = Vector3(320, 0.5, 320)
+
+[sub_resource type="BoxShape3D" id="FloorShape"]
+size = Vector3(320, 0.5, 320)
+
+[sub_resource type="ProceduralSkyMaterial" id="Day"]
+sky_top_color = Color(0.23,0.59,0.94,1)
+sky_horizon_color = Color(0.83,0.93,1,1)
+[sub_resource type="Sky" id="Sky"]
+sky_material = SubResource("Day")
+[sub_resource type="Environment" id="Air"]
+background_mode = 2
+sky = SubResource("Sky")
+ambient_light_source = 2
+ambient_light_color = Color(0.91,0.96,1,1)
+ambient_light_energy = 0.55
+[node name="TestArena" type="Node3D" unique_id=732592907]
+script = ExtResource("Arena")
+
+[node name="Floor" type="StaticBody3D" parent="." unique_id=161077229]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.59, 0)
+
+[node name="Surface" type="MeshInstance3D" parent="Floor" unique_id=1588950729]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.012949944, 4.7683716e-07, -0.00703907)
+mesh = SubResource("FloorMesh")
+
+[node name="Collider" type="CollisionShape3D" parent="Floor" unique_id=1097061170]
+shape = SubResource("FloorShape")
+
+[node name="Daylight" type="WorldEnvironment" parent="."]
+environment = SubResource("Air")
+[node name="Meadow" parent="." instance=ExtResource("Meadow")]
+[node name="OuterMeadow" type="Node3D" parent="."]
+script = ExtResource("Outer")
+[node name="SkyCourse" type="Node3D" parent="."]
+script = ExtResource("Course")
+[node name="Polygon" type="RigidBody3D" parent="." unique_id=966711527]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 2, 0)
+mass = 4.0
+linear_damp = 0.4
+angular_damp = 1.0
+script = ExtResource("Controller")
+
+[node name="Sun" type="DirectionalLight3D" parent="." unique_id=1409297299]
+transform = Transform3D(0.90630776, 0.36599818, -0.21130912, 0, 0.49999997, 0.86602545, 0.42261827, -0.7848856, 0.45315385, 0, 0, 0)
+shadow_enabled = true
+
+[node name="Fill" type="DirectionalLight3D" parent="." unique_id=1066087400]
+transform = Transform3D(-0.76604444, -0.26144528, 0.5872157, 0, 0.9135454, 0.40673664, -0.64278764, 0.31157833, -0.6998164, 0, 0, 0)
+light_energy = 0.65
+
+[node name="Camera" type="Camera3D" parent="." unique_id=162075577]
+current = true
+
+[node name="Overlay" type="CanvasLayer" parent="." unique_id=197924942]
+
+[node name="Hud" type="Label" parent="Overlay" unique_id=1693203138]
+offset_left = 16.0
+offset_top = 12.0
+theme_override_constants/outline_size = 5
